@@ -56,8 +56,12 @@ class RAGState(TypedDict):
     recommended_models: list[dict[str, Any]]
     """Structured model recommendations."""
 
-    # ── Routing ─────────────────────────────────────────────────────────────
-    route: str
-    """Next routing decision (set by router nodes)."""
-    error: str
-    """Error message if a node fails."""
+    # ── Customer feedback analysis ───────────────────────────────────────────
+    feedback_themes: list[dict[str, Any]]
+    """Extracted themes with counts, sentiment, and example quotes."""
+    sentiment_distribution: dict[str, float]
+    """Ratio of positive / neutral / negative feedback."""
+    trend_summary: str
+    """Structured Markdown trend report produced by trend_summarizer."""
+
+

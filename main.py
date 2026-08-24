@@ -7,6 +7,8 @@ Usage:
   python main.py index --arxiv 2005.11401
   python main.py seed-graph
   python main.py chat
+  python main.py feedback-trends --source data/raw/feedback.csv
+  python main.py feedback-trends --source data/raw/feedback.json --query "What are users complaining about most?"
 """
 from __future__ import annotations
 
@@ -117,6 +119,70 @@ def chat() -> None:
         messages = result.get("messages", [])
         console.print("\n[bold green]Assistant:[/]")
         console.print(Markdown(result.get("answer", "…")))
+
+
+# ── feedback-trends ────────────────────────────────────────────────────────
+
+@app.command(name="feedback-trends")
+def feedback_trends(
+    source: str | None = typer.Option(
+        None, "--source", "-s",
+        help="Path to a CSV or JSON file containing customer feedback to index.",
+    ),
+    query: str = typer.Option(
+        "Summarize recent customer feedback trends",
+        "--query", "-q",
+        help="Natural language question about the feedback.",
+    ),
+    no_index: bool = typer.Option(
+        False, "--no-index",
+        help="Skip indexing; query the existing vector store directly.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Index customer feedback and produce a structured trend summary report."""
+    from src.graph.workflow import compile_graph
+
+    # ── Optional ingestion step ────────────────────────────────────────────
+    if source and not no_index:
+        from src.rag.feedback_indexer import FeedbackIndexer
+        console.print(Panel(f"[bold yellow]Indexing feedback:[/] {source}", expand=False))
+        indexer = FeedbackIndexer()
+        n = indexer.index_feedback_file(source)
+        console.print(f"[green]✓[/] Indexed [bold]{n}[/] feedback entries.\n")
+
+    console.print(Panel(f"[bold cyan]Analysing feedback trends:[/] {query}", expand=False))
+
+    graph = compile_graph()
+    result = graph.invoke({"query": query, "messages": []})
+
+    if verbose:
+        console.print(f"\n[dim]Detected intent:[/] {result.get('query_intent')}")
+        console.print(f"[dim]Reflection score:[/] {result.get('reflection_score', 0):.2f}")
+
+        themes = result.get("feedback_themes") or []
+        if themes:
+            console.print("\n[bold magenta]Extracted Themes:[/]")
+            for t in themes[:8]:
+                console.print(
+                    f"  • [bold]{t.get('theme')}[/]  ({t.get('sentiment', '')})"
+                    f"  ~{t.get('count', '?')} mentions"
+                )
+
+        sentiment = result.get("sentiment_distribution") or {}
+        if sentiment:
+            pos = sentiment.get("positive", 0)
+            neu = sentiment.get("neutral", 0)
+            neg = sentiment.get("negative", 0)
+            console.print(
+                f"\n[dim]Sentiment:[/]  "
+                f"[green]▲ {pos:.0%} positive[/]  "
+                f"[yellow]● {neu:.0%} neutral[/]  "
+                f"[red]▼ {neg:.0%} negative[/]"
+            )
+
+    console.print("\n")
+    console.print(Markdown(result.get("answer", "No trend summary generated.")))
 
 
 if __name__ == "__main__":

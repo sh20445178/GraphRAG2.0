@@ -13,6 +13,8 @@ from src.graph.nodes import (
     node_generator,
     node_reflection,
     node_regenerator,
+    node_feedback_analyser,
+    node_trend_summarizer,
 )
 from src.graph.edges import route_after_reflection, route_by_intent
 
@@ -23,20 +25,20 @@ def build_graph() -> StateGraph:
 
     query_analyser
          │
-    ┌────┴─────┐
+    ┌────┴──────────┐
     retriever  graph_enricher   ← parallel
-    └────┬─────┘
+    └────┬──────────┘
        reranker
          │
-      ┌──┴──┐
-    ml_advisor (recommend) or generator (other intents)
-         │
-      generator
-         │
-      reflection
-         │
-    ┌────┴─────┐
-    END    regenerator → reflection (loop, max 2x)
+    ┌────┴─────────────────────────┐
+    │ (recommend)  │ (other)  │ (feedback_trends)
+    ml_advisor  generator  feedback_analyser
+         │           │           │
+         └───────────┘    trend_summarizer
+                │               │
+            reflection ←────────┘
+           ┌───┴───┐
+          END  regenerator ⟲ (max 2x)
     """
     builder = StateGraph(RAGState)
 
@@ -49,6 +51,8 @@ def build_graph() -> StateGraph:
     builder.add_node("generator", node_generator)
     builder.add_node("reflection", node_reflection)
     builder.add_node("regenerator", node_regenerator)
+    builder.add_node("feedback_analyser", node_feedback_analyser)
+    builder.add_node("trend_summarizer", node_trend_summarizer)
 
     # ── Entry point ────────────────────────────────────────────────────────
     builder.set_entry_point("query_analyser")
@@ -65,9 +69,13 @@ def build_graph() -> StateGraph:
     builder.add_conditional_edges(
         "reranker",
         route_by_intent,
-        {"ml_advisor": "ml_advisor", "generate": "generator"},
+        {"ml_advisor": "ml_advisor", "generate": "generator", "feedback": "feedback_analyser"},
     )
     builder.add_edge("ml_advisor", "generator")
+
+    # ── Feedback trend pipeline ────────────────────────────────────────────
+    builder.add_edge("feedback_analyser", "trend_summarizer")
+    builder.add_edge("trend_summarizer", "reflection")
 
     # ── Reflection loop ────────────────────────────────────────────────────
     builder.add_edge("generator", "reflection")

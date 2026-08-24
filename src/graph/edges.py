@@ -7,11 +7,6 @@ MAX_ITERATIONS = 2
 REFLECTION_THRESHOLD = 0.85
 
 
-def route_after_analysis(state: RAGState) -> str:
-    """After query analysis, always proceed to parallel retrieval."""
-    return "retrieve"
-
-
 def route_after_reflection(state: RAGState) -> str:
     """
     Decide whether to regenerate or finalise:
@@ -31,4 +26,6 @@ def route_by_intent(state: RAGState) -> str:
     intent = state.get("query_intent", "general")
     if intent == "recommend":
         return "ml_advisor"
+    if intent == "feedback_trends":
+        return "feedback"
     return "generate"
